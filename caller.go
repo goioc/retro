@@ -20,18 +20,22 @@ import (
 	"time"
 )
 
+// Caller is the main type of the library, responsible for calling a specified function, following the specified retry
+// strategy.
 type Caller struct {
 	retriableErrors  map[error]BackoffStrategy
 	anyErrorStrategy *BackoffStrategy
 	maxDuration      *time.Duration
 }
 
+// NewCaller is just a constructor for Caller.
 func NewCaller() Caller {
 	return Caller{
 		retriableErrors: map[error]BackoffStrategy{},
 	}
 }
 
+// WithRetriableError allows one to register an error along with the backoff strategy for it.
 func (c Caller) WithRetriableError(err error, strategy BackoffStrategy) Caller {
 	for e := range c.retriableErrors {
 		if errors.Is(e, err) {
@@ -42,16 +46,21 @@ func (c Caller) WithRetriableError(err error, strategy BackoffStrategy) Caller {
 	return c
 }
 
+// WithRetryOnAnyError acts like WithRetriableError, but the specified strategy will be used upon getting _any_ error (
+// i.e. it makes all errors retriable).
 func (c Caller) WithRetryOnAnyError(strategy BackoffStrategy) Caller {
 	c.anyErrorStrategy = &strategy
 	return c
 }
 
+// WithMaxDuration allow one to specify maximum duration (total for all retries).
 func (c Caller) WithMaxDuration(maxDuration time.Duration) Caller {
 	c.maxDuration = &maxDuration
 	return c
 }
 
+// Call is the main method that accepts a context.Context (which can be used to terminate retrying) and the function,
+// which is essentially a wrapper around some actual function.
 func (c Caller) Call(ctx context.Context, f func() error) (err error) {
 	if c.maxDuration != nil {
 		ctxWithTimeout, cancelFunc := context.WithTimeout(ctx, *c.maxDuration)

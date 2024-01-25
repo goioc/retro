@@ -19,7 +19,9 @@ import (
 	"math/rand"
 )
 
+// Generator interface describes an abstraction for implementing sequence generators (used in the back-off strategy).
 type Generator interface {
+	// Next method returns a next number in the sequence.
 	Next() int64
 }
 
@@ -27,6 +29,8 @@ type random struct {
 	max int64
 }
 
+// NewRandom creates a Generator based on math.rand, i.e. all the numbers are random (within a specified interval from 0
+// to `max`).
 func NewRandom(max int64) Generator {
 	return random{max: max}
 }
@@ -39,6 +43,7 @@ type constant struct {
 	c int64
 }
 
+// NewConstant creates a Generator that always return the same number (specified as `c` parameter).
 func NewConstant(c int64) Generator {
 	return constant{c: c}
 }
@@ -52,6 +57,7 @@ type linear struct {
 	delta     int64
 }
 
+// NewLinear creates a Generator where every next number is the previous number plus some `delta` (starts with 0).
 func NewLinear(delta int64) Generator {
 	return &linear{delta: delta}
 }
@@ -68,6 +74,8 @@ type exponential struct {
 	factor    int64
 }
 
+// NewExponential creates a Generator where every next number is the previous number multiplied by some `factor` (starts
+// with 0).
 func NewExponential(factor int64) Generator {
 	return &exponential{factor: factor}
 }
@@ -84,6 +92,8 @@ type fibonacci struct {
 	cur  int64
 }
 
+// NewFibonacci creates a Generator where every next number is a sum of two previous numbers (Fibonacci sequence).
+// Starts with 1.
 func NewFibonacci() Generator {
 	return &fibonacci{
 		prev: 0,
