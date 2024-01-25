@@ -1,4 +1,4 @@
-module retro
+module github.com/goioc/retro
 
 go 1.21
 
