@@ -16,7 +16,7 @@ package retro
 
 import (
 	"errors"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"math"
 	"math/rand"
 	"time"
@@ -38,7 +38,7 @@ func NewBackoffStrategy(generator Generator, durationUnit time.Duration) Backoff
 		durationUnit:                durationUnit,
 		cappedDurationInNanoseconds: math.MaxInt64,
 		maxRetries:                  math.MaxInt64,
-		called:                      pointer.Int64(0),
+		called:                      ptr.To[int64](0),
 	}
 }
 

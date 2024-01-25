@@ -43,9 +43,7 @@ func TestCaller(t *testing.T) {
 	foo.On("bar").Return(err1)
 
 	caller := NewCaller()
-	err := caller.Call(context.Background(), func() error {
-		return foo.bar()
-	})
+	err := caller.Call(context.Background(), foo.bar)
 	require.ErrorIs(t, err, err1)
 	foo.AssertNumberOfCalls(t, "bar", 1)
 }
@@ -55,9 +53,7 @@ func TestCallerWithRetriableError(t *testing.T) {
 	foo.On("bar").Return(err1)
 
 	caller := NewCaller().WithRetriableError(err1, NewBackoffStrategy(NewConstant(10), time.Millisecond).WithMaxRetries(10))
-	err := caller.Call(context.Background(), func() error {
-		return foo.bar()
-	})
+	err := caller.Call(context.Background(), foo.bar)
 	require.ErrorIs(t, err, err1)
 	foo.AssertNumberOfCalls(t, "bar", 10)
 }
@@ -67,9 +63,7 @@ func TestCallerWithRetryOnAnyError(t *testing.T) {
 	foo.On("bar").Return(err1)
 
 	caller := NewCaller().WithRetryOnAnyError(NewBackoffStrategy(NewConstant(10), time.Millisecond).WithMaxRetries(10))
-	err := caller.Call(context.Background(), func() error {
-		return foo.bar()
-	})
+	err := caller.Call(context.Background(), foo.bar)
 	require.ErrorIs(t, err, err1)
 	foo.AssertNumberOfCalls(t, "bar", 10)
 }

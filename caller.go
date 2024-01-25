@@ -65,7 +65,7 @@ mainLoop:
 			return err
 		default:
 			if err = f(); err == nil {
-				return err
+				return nil
 			}
 			if c.anyErrorStrategy != nil {
 				delay, e := c.anyErrorStrategy.Delay()
