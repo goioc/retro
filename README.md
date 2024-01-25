@@ -2,8 +2,7 @@
 [![goioc](https://habrastorage.org/webt/ym/pu/dc/ympudccm7j7a3qex_jjroxgsiwg.png)](https://github.com/goioc)
 
 [![Go](https://github.com/goioc/retro/workflows/Go/badge.svg)](https://github.com/goioc/retro/actions)
-
-[//]: # ([![go.dev reference]&#40;https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square&#41;]&#40;https://pkg.go.dev/github.com/goioc/di/?tab=doc&#41;)
+[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/goioc/retro/?tab=doc)
 [![CodeFactor](https://www.codefactor.io/repository/github/goioc/retro/badge)](https://www.codefactor.io/repository/github/goioc/retro)
 
 [//]: # ([![Go Report Card]&#40;https://goreportcard.com/badge/github.com/goioc/di&#41;]&#40;https://goreportcard.com/report/github.com/goioc/di&#41;)
