@@ -13,7 +13,7 @@
 
 ## Why another retry library?
 
-There's a bunch of excellent retry-related Go libraries out there (and I took inspiration from some of them), like [this one] (https://github.com/sethvargo/go-retry). Some of them are highly configurable (even more configurable than mine), but I was always lacking one feature: configurability by the error. I.e., most of the libraries allow you to configure the "retrier" in some or another way, making it behave the same way for all the "retriable" errors. What I needed for some of my usecases, if having different retry strategies for different errore. And that's why this library was made.
+There's a bunch of excellent retry-related Go libraries out there (and I took inspiration from some of them), like [this one](https://github.com/sethvargo/go-retry). Some of them are highly configurable (even more configurable than mine), but I was always lacking one feature: configurability by the error. I.e., most of the libraries allow you to configure the "retrier" in some or another way, making it behave the same way for all the "retriable" errors. What I needed for some of my usecases, if having different retry strategies for different errore. And that's why this library was made.
 
 ## Basic usage
 
