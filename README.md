@@ -33,3 +33,7 @@ So, let's say we have a DB-related function that may return different types of e
 		panic(err)
 	}
 ```
+
+## More examples?
+
+Please, take a look at the unit-tests for more examples.
