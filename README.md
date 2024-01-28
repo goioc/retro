@@ -17,7 +17,7 @@ There's a bunch of excellent retry-related Go libraries out there (and I took in
 
 ## Basic usage
 
-So, let's say we have a DB-related function that may return different types of errors: it returns `sql.ErrNoRows` if the result-set of the lookup is empty, and it returns `driver.ErrBadConn` if there's some trasient connectivity error. In the first case, I want to retry with the constant rate (let's say, every `second`) and the maximum retry count of `3`. In the second case, I want to have an exponential back-off starting with `10 milliseconds`, but the retry delay should not exceed `1 second`. All together, I want the retry phase to not exceed `10 seconds`. Here's how one could implement it using the `retro` library:
+So, let's say we have a DB-related function that may return different types of errors: it returns `sql.ErrNoRows` if the result-set of the lookup is empty, and it returns `driver.ErrBadConn` if there's some trasient connectivity error. In the first case, I want to retry with the constant rate (let's say, every `second`) and the maximum retry count of `3`. In the second case, I want to have an exponential back-off starting with `10 milliseconds`, but the retry delay should not exceed `1 second`. All together, I want the retry phase to not exceed `5 seconds`. Here's how one could implement it using the `retro` library:
 ```go
 	caller := NewCaller(). // instantiating the "retrier" aka "caller"
 		WithRetriableError(sql.ErrNoRows,
@@ -26,7 +26,7 @@ So, let's say we have a DB-related function that may return different types of e
 		WithRetriableError(driver.ErrBadConn,
 			NewBackoffStrategy(NewExponential(2), time.Millisecond).
 				WithCappedDuration(time.Second)). // exponential back-off with factor 2, 1 millisecond time unit and max retry delay of 1 second
-		WithMaxDuration(10 * time.Second) // maximum retry duration (across all retriable errors) - 10 seconds
+		WithMaxDuration(5 * time.Second) // maximum retry duration (across all retriable errors) - 5 seconds
 	if err := caller.Call(context.TODO(), func() error {
 		return queryDBFunction(...) // your function that runs a database query
 	}); err != nil {
