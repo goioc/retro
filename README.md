@@ -11,4 +11,7 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/G2G5JUKU7)
 
-## Why DI in Go? Why IoC at all?
+## Why another retry library?
+
+There's a bunch of excellent retry-related Go libraries out there (and I took inspiration) from some of them, like this
+one.
