@@ -33,6 +33,7 @@ So, let's say we have a DB-related function that may return different types of e
 		panic(err)
 	}
 ```
+You can also specify a retry startegy for any erro using `WithRetryOnAnyError(...)` on the caller.
 
 ## More examples?
 
