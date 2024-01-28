@@ -18,6 +18,7 @@ There's a bunch of excellent retry-related Go libraries out there (and I took in
 ## Basic usage
 
 So, let's say we have a DB-related function that may return different types of errors: it returns `sql.ErrNoRows` if the result-set of the lookup is empty, and it returns `driver.ErrBadConn` if there's some trasient connectivity error. In the first case, I want to retry with the constant rate (let's say, every `second`) and the maximum retry count of `3`. In the second case, I want to have an exponential back-off starting with `10 milliseconds`, but the retry delay should not exceed `1 second`. All together, I want the retry phase to not exceed `5 seconds`. Here's how one could implement it using the `retro` library:
+
 ```go
 	caller := NewCaller(). // instantiating the "retrier" aka "caller"
 		WithRetriableError(sql.ErrNoRows,
@@ -33,6 +34,7 @@ So, let's say we have a DB-related function that may return different types of e
 		panic(err)
 	}
 ```
+
 You can also specify a retry startegy for any erro using `WithRetryOnAnyError(...)` on the caller.
 
 ## More examples?
