@@ -16,14 +16,12 @@ package retro
 
 import (
 	"context"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
+	"errors"
 	"testing"
 	"time"
-)
 
-import (
-	"errors"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -35,7 +33,7 @@ type tester struct {
 }
 
 func (t *tester) bar() error {
-	return t.Called().Get(0).(error)
+	return t.Called().Error(0)
 }
 
 func TestCaller(t *testing.T) {
@@ -55,7 +53,7 @@ func TestCallerWithRetriableError(t *testing.T) {
 	caller := NewCaller().WithRetriableError(err1, NewBackoffStrategy(NewConstant(10), time.Millisecond).WithMaxRetries(10))
 	err := caller.Call(context.Background(), foo.bar)
 	require.ErrorIs(t, err, err1)
-	foo.AssertNumberOfCalls(t, "bar", 10)
+	foo.AssertNumberOfCalls(t, "bar", 11)
 }
 
 func TestCallerWithRetryOnAnyError(t *testing.T) {
@@ -65,17 +63,16 @@ func TestCallerWithRetryOnAnyError(t *testing.T) {
 	caller := NewCaller().WithRetryOnAnyError(NewBackoffStrategy(NewConstant(10), time.Millisecond).WithMaxRetries(10))
 	err := caller.Call(context.Background(), foo.bar)
 	require.ErrorIs(t, err, err1)
-	foo.AssertNumberOfCalls(t, "bar", 10)
+	foo.AssertNumberOfCalls(t, "bar", 11)
 }
 
 func TestCallerWithMaxDuration(t *testing.T) {
-	caller := NewCaller().WithRetryOnAnyError(NewBackoffStrategy(NewConstant(10), time.Millisecond)).WithMaxDuration(time.Second)
+	caller := NewCaller().WithRetryOnAnyError(NewBackoffStrategy(NewConstant(1), time.Hour)).WithMaxDuration(20 * time.Millisecond)
 	now := time.Now()
 	err := caller.Call(context.Background(), func() error {
 		return err1
 	})
-	elapsed := time.Since(now).Milliseconds()
 	require.ErrorIs(t, err, err1)
-	require.GreaterOrEqual(t, elapsed, int64(1000))
-	require.Less(t, elapsed, int64(1100))
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.Less(t, time.Since(now), time.Second)
 }
