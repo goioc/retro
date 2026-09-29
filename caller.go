@@ -1,17 +1,3 @@
-/*
- * Copyright (c) 2024 Go IoC
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- */
-
 package retro
 
 import (
@@ -20,28 +6,34 @@ import (
 	"time"
 )
 
-// Caller calls functions with the configured retry strategies. Configuration
-// methods return independent callers. A configured Caller can be reused and its
-// Call method can be used concurrently.
+// Caller invokes functions according to its retry rules. Its configuration
+// methods return new callers without changing the receiver. A configured Caller
+// can be reused and its Call method can be used concurrently.
+// The zero value calls a function once without retrying failures.
 type Caller struct {
 	retriableErrors  []retryRule
 	anyErrorStrategy *BackoffStrategy
 	maxDuration      *time.Duration
 }
 
+// retryRule pairs an error target with a strategy. Slice order determines which
+// rule wins when more than one target matches an error.
 type retryRule struct {
 	err      error
 	strategy BackoffStrategy
 }
 
-// NewCaller constructs a Caller. The zero value is also ready to use.
+// NewCaller returns a caller with no retry rules or timeout, equivalent to the
+// zero value of [Caller].
 func NewCaller() Caller {
 	return Caller{}
 }
 
-// WithRetriableError registers a strategy for errors matching err via errors.Is.
-// Rules are matched in registration order; the first matching rule is used.
-// Each rule has its own retry budget and generator for each Call.
+// WithRetriableError returns a caller with a strategy for errors that satisfy
+// errors.Is(returnedError, err), including wrapped and joined errors.
+// The first matching rule in registration order wins. Each rule has its own
+// retry budget and generator for each Call. [Caller.WithRetryOnAnyError], when
+// configured, takes precedence over these rules.
 func (c Caller) WithRetriableError(err error, strategy BackoffStrategy) Caller {
 	rules := make([]retryRule, len(c.retriableErrors)+1)
 	copy(rules, c.retriableErrors)
@@ -50,28 +42,36 @@ func (c Caller) WithRetriableError(err error, strategy BackoffStrategy) Caller {
 	return c
 }
 
-// WithRetryOnAnyError retries all errors using strategy. When configured, it
-// takes precedence over the rules registered with WithRetriableError.
+// WithRetryOnAnyError returns a caller that retries every error using strategy.
+// It takes precedence over rules registered with [Caller.WithRetriableError].
 func (c Caller) WithRetryOnAnyError(strategy BackoffStrategy) Caller {
 	c.anyErrorStrategy = &strategy
 	return c
 }
 
-// WithMaxDuration limits the time spent calling f and waiting between attempts.
-// It interrupts backoff waits, but cannot interrupt f while it is executing.
-// A nonpositive duration prevents f from being called.
+// WithMaxDuration returns a caller with a timeout measured from the start of
+// each Call. An earlier deadline on Call's context takes precedence.
+// Expiration interrupts backoff waits, but a running callback may continue past
+// the timeout. A nonpositive duration prevents the initial attempt.
 func (c Caller) WithMaxDuration(maxDuration time.Duration) Caller {
 	c.maxDuration = &maxDuration
 	return c
 }
 
-// Call invokes f until it succeeds, returns an unregistered error, exhausts its
-// retry budget, or ctx is canceled. Retry state is independent for every Call.
-// On cancellation, the returned error matches ctx.Err() and, if present, the
-// last error from f through errors.Is. A successful f returns nil.
+// Call invokes f synchronously and retries failures according to the caller's
+// rules. Every Call starts fresh retry counters and generator sequences.
+// It returns nil when f succeeds, or the last error from f when no rule matches
+// or the selected strategy's retry budget is exhausted.
 //
-// Call does not run f in a separate goroutine. To cancel work inside f, have f
-// observe its own context (including any deadline needed for that work).
+// Cancellation, a caller timeout, or invalid strategy configuration stops
+// retries. The returned error matches both the stopping error and the last
+// error from f, when one exists, through [errors.Is]. An already-canceled
+// context prevents the initial attempt.
+//
+// Cancellation interrupts waits, but cannot interrupt an executing f. Pass a
+// context to the work inside f if it should also stop on cancellation. A timeout
+// set by [Caller.WithMaxDuration] is internal to Call and is not passed to f.
+// Neither ctx nor f may be nil.
 func (c Caller) Call(ctx context.Context, f func() error) error {
 	if c.maxDuration != nil {
 		ctxWithTimeout, cancelFunc := context.WithTimeout(ctx, *c.maxDuration)

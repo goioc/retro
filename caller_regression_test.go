@@ -34,6 +34,7 @@ func TestCallerMatchesWrappedAndJoinedErrors(t *testing.T) {
 	}
 }
 
+// sliceError exercises error matching with a value that cannot be a map key.
 type sliceError []string
 
 func (e sliceError) Error() string { return e[0] }
@@ -158,6 +159,8 @@ func TestCallerDoesNotExecuteWithExpiredContext(t *testing.T) {
 	}
 }
 
+// notifyingGenerator signals when backoff begins so cancellation tests do not
+// depend on sleeps. Each instance is used for a single retry.
 type notifyingGenerator struct{ started chan struct{} }
 
 func (g *notifyingGenerator) Next() int64 {
@@ -240,6 +243,7 @@ func TestCallerConcurrentCalls(t *testing.T) {
 	}
 }
 
+// recordingGenerator records a sequence to expose accidental state sharing.
 type recordingGenerator struct{ values []int64 }
 
 func (g *recordingGenerator) Next() int64 {

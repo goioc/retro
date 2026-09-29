@@ -1,17 +1,3 @@
-/*
- * Copyright (c) 2024 Go IoC
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- */
-
 package retro
 
 import (
@@ -22,12 +8,16 @@ import (
 	"time"
 )
 
-// ErrMaxRetries indicates that a strategy's retry budget has been exhausted.
+// ErrMaxRetries is returned by [BackoffStrategy.Delay] when its retry budget is
+// exhausted. [Caller.Call] returns the last callback error instead.
 var ErrMaxRetries = errors.New("reached max retries")
 
-// BackoffStrategy configures delays and retry limits. Caller starts a fresh
-// sequence for every Call. Direct calls to Delay advance one sequence; copies
-// of a strategy share that direct sequence and its retry counter.
+// BackoffStrategy configures delays and retry limits. Use [NewBackoffStrategy]
+// or [NewBackoffStrategyWithFactory] to initialize it.
+//
+// Caller starts a fresh sequence for every Call. Direct Delay calls advance one
+// sequence; copies of a strategy, including values returned by its configuration
+// methods, share that direct sequence and its retry counter.
 type BackoffStrategy struct {
 	generatorFactory            func() Generator
 	durationUnit                time.Duration
@@ -38,17 +28,21 @@ type BackoffStrategy struct {
 	state *backoffState
 }
 
+// backoffState serializes access to one generator sequence and retry counter.
 type backoffState struct {
 	mu        sync.Mutex
 	called    int64
 	generator Generator
 }
 
-// NewBackoffStrategy multiplies generator's sequence by durationUnit. Built-in
-// generators start from the beginning for each Call, regardless of prior use.
-// Custom generators can be used directly with Delay; to use one with Caller,
-// use NewBackoffStrategyWithFactory so each Call gets independent state.
-// Negative duration units are reported as errors by Delay.
+// NewBackoffStrategy returns a strategy whose base delays are generator values
+// multiplied by durationUnit. It defaults to no jitter, [math.MaxInt64] retries,
+// and a maximum delay of math.MaxInt64 nanoseconds.
+//
+// Direct Delay calls advance the supplied generator from its current position.
+// Caller restarts built-in generators for each Call, regardless of prior use.
+// For custom generators used with Caller, use [NewBackoffStrategyWithFactory]
+// to provide independent state. Delay reports negative duration units as errors.
 func NewBackoffStrategy(generator Generator, durationUnit time.Duration) BackoffStrategy {
 	b := NewBackoffStrategyWithFactory(nil, durationUnit)
 	b.state.generator = generator
@@ -58,9 +52,12 @@ func NewBackoffStrategy(generator Generator, durationUnit time.Duration) Backoff
 	return b
 }
 
-// NewBackoffStrategyWithFactory constructs a strategy for a custom generator.
-// factory must be safe to call concurrently and return a new, non-nil generator
-// with independent state each time. It is called lazily on the first retry.
+// NewBackoffStrategyWithFactory returns a strategy that creates generators on
+// demand, with the same defaults as [NewBackoffStrategy]. The factory is called
+// lazily when a sequence first needs a generator, including each rule in a Call.
+// It must be safe to invoke concurrently and return a new, non-nil generator
+// with independent state each time. A nil factory, nil result, or negative
+// duration unit is reported as an error by Delay.
 func NewBackoffStrategyWithFactory(factory func() Generator, durationUnit time.Duration) BackoffStrategy {
 	return BackoffStrategy{
 		generatorFactory:            factory,
@@ -71,36 +68,43 @@ func NewBackoffStrategyWithFactory(factory func() Generator, durationUnit time.D
 	}
 }
 
-// WithJitter adds uniform jitter in [-jitter, jitter) to each delay. Zero
-// disables jitter. Negative values are reported as errors by Delay.
+// WithJitter returns a strategy that adds uniform jitter in [-jitter, jitter)
+// to each base delay before clamping it to zero and the configured cap.
+// Zero disables jitter. Delay reports negative values as errors.
 func (b BackoffStrategy) WithJitter(jitter time.Duration) BackoffStrategy {
 	b.jitterInNanoseconds = jitter.Nanoseconds()
 	return b
 }
 
-// WithCappedDuration caps the final delay, including jitter. Negative caps are
-// reported as errors by Delay.
+// WithCappedDuration returns a strategy that limits the final delay, including
+// jitter, to cappedDuration. A zero cap makes all delays zero. Delay reports
+// negative caps as errors.
 func (b BackoffStrategy) WithCappedDuration(cappedDuration time.Duration) BackoffStrategy {
 	b.cappedDurationInNanoseconds = cappedDuration.Nanoseconds()
 	return b
 }
 
-// WithMaxRetries permits maxRetries retries after the initial attempt, per
-// Call and per registered rule. Zero disables retries. Negative limits are
-// reported as errors by Delay.
+// WithMaxRetries returns a strategy permitting maxRetries retries after the
+// initial attempt, per Call and per registered rule. Direct use permits that
+// many successful Delay calls. Zero disables retries; Delay reports negative
+// limits as errors.
 func (b BackoffStrategy) WithMaxRetries(maxRetries int64) BackoffStrategy {
 	b.maxRetries = maxRetries
 	return b
 }
 
+// fresh retains configuration but discards execution state. A factory supplies
+// a new generator when this Call first needs a delay.
 func (b BackoffStrategy) fresh() BackoffStrategy {
 	b.state = &backoffState{}
 	return b
 }
 
-// Delay returns the next delay, or ErrMaxRetries once the configured number of
-// delays has been returned. It reports invalid configuration as an error.
-// Concurrent calls to Delay on the same strategy are serialized.
+// Delay returns the next delay, clamped to zero and the configured cap after
+// adding jitter. Duration arithmetic saturates at the int64 bounds on overflow.
+// It returns [ErrMaxRetries] after the configured number of delays, or an error
+// for invalid configuration. On error, the returned duration is zero.
+// Concurrent calls on the same strategy or its copies are serialized.
 func (b BackoffStrategy) Delay() (time.Duration, error) {
 	if b.state == nil {
 		return 0, errors.New("retro: initialize the strategy with a constructor")
