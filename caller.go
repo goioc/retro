@@ -20,81 +20,114 @@ import (
 	"time"
 )
 
-// Caller is the main type of the library, responsible for calling a specified function, following the specified retry
-// strategy.
+// Caller calls functions with the configured retry strategies. Configuration
+// methods return independent callers. A configured Caller can be reused and its
+// Call method can be used concurrently.
 type Caller struct {
-	retriableErrors  map[error]BackoffStrategy
+	retriableErrors  []retryRule
 	anyErrorStrategy *BackoffStrategy
 	maxDuration      *time.Duration
 }
 
-// NewCaller is just a constructor for Caller.
-func NewCaller() Caller {
-	return Caller{
-		retriableErrors: map[error]BackoffStrategy{},
-	}
+type retryRule struct {
+	err      error
+	strategy BackoffStrategy
 }
 
-// WithRetriableError allows one to register an error along with the backoff strategy for it.
+// NewCaller constructs a Caller. The zero value is also ready to use.
+func NewCaller() Caller {
+	return Caller{}
+}
+
+// WithRetriableError registers a strategy for errors matching err via errors.Is.
+// Rules are matched in registration order; the first matching rule is used.
+// Each rule has its own retry budget and generator for each Call.
 func (c Caller) WithRetriableError(err error, strategy BackoffStrategy) Caller {
-	for e := range c.retriableErrors {
-		if errors.Is(e, err) {
-			return c
-		}
-	}
-	c.retriableErrors[err] = strategy
+	rules := make([]retryRule, len(c.retriableErrors)+1)
+	copy(rules, c.retriableErrors)
+	rules[len(c.retriableErrors)] = retryRule{err: err, strategy: strategy}
+	c.retriableErrors = rules
 	return c
 }
 
-// WithRetryOnAnyError acts like WithRetriableError, but the specified strategy will be used upon getting _any_ error (
-// i.e. it makes all errors retriable).
+// WithRetryOnAnyError retries all errors using strategy. When configured, it
+// takes precedence over the rules registered with WithRetriableError.
 func (c Caller) WithRetryOnAnyError(strategy BackoffStrategy) Caller {
 	c.anyErrorStrategy = &strategy
 	return c
 }
 
-// WithMaxDuration allow one to specify maximum duration (total for all retries).
+// WithMaxDuration limits the time spent calling f and waiting between attempts.
+// It interrupts backoff waits, but cannot interrupt f while it is executing.
+// A nonpositive duration prevents f from being called.
 func (c Caller) WithMaxDuration(maxDuration time.Duration) Caller {
 	c.maxDuration = &maxDuration
 	return c
 }
 
-// Call is the main method that accepts a context.Context (which can be used to terminate retrying) and the function,
-// which is essentially a wrapper around some actual function.
-func (c Caller) Call(ctx context.Context, f func() error) (err error) {
+// Call invokes f until it succeeds, returns an unregistered error, exhausts its
+// retry budget, or ctx is canceled. Retry state is independent for every Call.
+// On cancellation, the returned error matches ctx.Err() and, if present, the
+// last error from f through errors.Is. A successful f returns nil.
+//
+// Call does not run f in a separate goroutine. To cancel work inside f, have f
+// observe its own context (including any deadline needed for that work).
+func (c Caller) Call(ctx context.Context, f func() error) error {
 	if c.maxDuration != nil {
 		ctxWithTimeout, cancelFunc := context.WithTimeout(ctx, *c.maxDuration)
 		defer cancelFunc()
 		ctx = ctxWithTimeout
 	}
-mainLoop:
+	// Only execution state is copied; registered configuration stays immutable.
+	rules := make([]retryRule, len(c.retriableErrors))
+	for i, rule := range c.retriableErrors {
+		rules[i] = retryRule{err: rule.err, strategy: rule.strategy.fresh()}
+	}
+	var anyStrategy *BackoffStrategy
+	if c.anyErrorStrategy != nil {
+		strategy := c.anyErrorStrategy.fresh()
+		anyStrategy = &strategy
+	}
+
+	var lastErr error
 	for {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(lastErr, err)
+		}
+		lastErr = f()
+		if lastErr == nil {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return errors.Join(lastErr, err)
+		}
+
+		strategy := anyStrategy
+		if strategy == nil {
+			for i := range rules {
+				if errors.Is(lastErr, rules[i].err) {
+					strategy = &rules[i].strategy
+					break
+				}
+			}
+		}
+		if strategy == nil {
+			return lastErr
+		}
+		delay, err := strategy.Delay()
+		if errors.Is(err, ErrMaxRetries) {
+			return lastErr
+		}
+		if err != nil {
+			return errors.Join(lastErr, err)
+		}
+
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
-			return err
-		default:
-			if err = f(); err == nil {
-				return nil
-			}
-			if c.anyErrorStrategy != nil {
-				delay, e := c.anyErrorStrategy.Delay()
-				if e != nil {
-					return err
-				}
-				time.Sleep(delay)
-				continue
-			}
-			for e, s := range c.retriableErrors {
-				if errors.Is(e, err) {
-					delay, e := s.Delay()
-					if e != nil {
-						return err
-					}
-					time.Sleep(delay)
-					continue mainLoop
-				}
-			}
-			return err
+			timer.Stop()
+			return errors.Join(lastErr, ctx.Err())
+		case <-timer.C:
 		}
 	}
 }

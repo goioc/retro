@@ -15,9 +15,10 @@
 package retro
 
 import (
-	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRandomGenerator(t *testing.T) {

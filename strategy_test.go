@@ -15,9 +15,10 @@
 package retro
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBackoffStrategy(t *testing.T) {
@@ -54,10 +55,10 @@ func TestBackoffStrategyWithMaxRetries(t *testing.T) {
 	strategy := NewBackoffStrategy(NewConstant(10), time.Millisecond).WithMaxRetries(5)
 	for i := 0; i < 10; i++ {
 		_, err := strategy.Delay()
-		if i < 4 { // one less, because it's applied after the function call
+		if i < 5 {
 			require.NoError(t, err)
 		} else {
-			require.ErrorContains(t, err, "reached max retries")
+			require.ErrorIs(t, err, ErrMaxRetries)
 		}
 	}
 }
