@@ -50,7 +50,7 @@ type backoffState struct {
 // use NewBackoffStrategyWithFactory so each Call gets independent state.
 // Negative duration units are reported as errors by Delay.
 func NewBackoffStrategy(generator Generator, durationUnit time.Duration) BackoffStrategy {
-b := NewBackoffStrategyWithFactory(nil, durationUnit)
+	b := NewBackoffStrategyWithFactory(nil, durationUnit)
 	b.state.generator = generator
 	if g, ok := generator.(interface{ newGenerator() Generator }); ok {
 		b.generatorFactory = g.newGenerator
